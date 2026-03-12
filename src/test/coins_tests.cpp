@@ -16,6 +16,7 @@
 #include <chrono>
 #include <map>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include <boost/test/unit_test.hpp>
@@ -1402,14 +1403,15 @@ BOOST_FIXTURE_TEST_CASE(sharding, TestingSetup)
     // Create some txn IDs we will add to the coins DB later
     constexpr uint16_t NumThreads {8};
     using TxIdArray = std::array<uint256, NumThreads>;
-    TxIdArray txIds {};
+    TxIdArray txIds {}, pregenTxIds {};
     for(int i = 0; i < NumThreads; ++i)
     {
-        txIds[i] = GetRandHash();
+        txIds[i] = InsecureRand256();
+        pregenTxIds[i] = InsecureRand256();
     }
 
     // Hash and height of a block that contains unspent transactions
-    uint256 blockHash { GetRandHash() };
+    uint256 blockHash { InsecureRand256() };
     uint32_t blockHeight {1};
 
     //
@@ -1448,6 +1450,7 @@ BOOST_FIXTURE_TEST_CASE(sharding, TestingSetup)
         auto shardedTarget = [blockHeight](uint16_t shardIndex,
                                            CCoinsViewCache::Shard& shard,
                                            const TxIdArray& txIds,
+                                           const TxIdArray& pregenTxIds,
                                            TxIdArray& newTxIds)
         {
             // Check coin exists via shard
@@ -1459,7 +1462,7 @@ BOOST_FIXTURE_TEST_CASE(sharding, TestingSetup)
             BOOST_CHECK(! shard.HaveCoin(spendCoin));
 
             // Create 2 new coins
-            uint256 newTxId { GetRandHash() };
+            auto& newTxId = pregenTxIds[shardIndex];
             newTxIds[shardIndex] = newTxId;
             COutPoint newCoin1 { newTxId, 0 };
             COutPoint newCoin2 { newTxId, 1 };
@@ -1481,7 +1484,7 @@ BOOST_FIXTURE_TEST_CASE(sharding, TestingSetup)
         BOOST_CHECK_EQUAL(span.GetShards().size(), 1U);
         BOOST_CHECK_EQUAL(span.GetShards()[0].GetCache().CachedCoinsCount(), 0U);
 
-        auto results = span.RunSharded(NumThreads, shardedTarget, std::cref(txIds), std::ref(newTxIds));
+        auto results = span.RunSharded(NumThreads, shardedTarget, std::cref(txIds), std::cref(pregenTxIds), std::ref(newTxIds));
 
         BOOST_CHECK_EQUAL(span.GetShards().size(), 1U);
         BOOST_CHECK_EQUAL(span.GetShards()[0].GetCache().CachedCoinsCount(), newTxIds.size() * 3);  // The original coin and the 2 new created coins
@@ -1532,13 +1535,13 @@ BOOST_FIXTURE_TEST_CASE(cache_all_inputs, TestingSetup)
     {
         CMutableTransaction txn {};
         txn.vin.resize(1);
-        txn.vin[0].prevout = COutPoint{GetRandHash(), 0};
+        txn.vin[0].prevout = COutPoint{InsecureRand256(), 0};
         txn.vin[0].scriptSig << OP_RETURN;
         txns.push_back(MakeTransactionRef(txn));
     }
 
     // Hash and height of a block that contains unspent transactions
-    uint256 blockHash { GetRandHash() };
+    uint256 blockHash { InsecureRand256() };
     uint32_t blockHeight {1};
 
     //
@@ -1577,8 +1580,39 @@ BOOST_FIXTURE_TEST_CASE(cache_all_inputs, TestingSetup)
         BOOST_CHECK(! provider.HaveCoinInCache(txn->vin[0].prevout));
     }
 
-    // Cache them all (Except the first in the list, which the function expects to be coinbase)
-    provider.DBCacheAllInputs(txns);
+    {
+        TestCoinsSpanCache span { provider };
+        span.SetBestBlock(blockHash);
+
+        auto shardedTarget = [](uint16_t shardIndex,
+                                CCoinsViewCache::Shard& shard,
+                                const std::vector<CTransactionRef>& txns)
+        {
+            CoinWithScript coin;
+            auto& tx = txns[shardIndex];
+            for (auto& vin : tx->vin) {
+                shard.SpendCoin(vin.prevout, &coin);
+            }
+            return true;
+        };
+
+        std::thread spawner([&]() {
+            std::vector<std::thread> threads;
+            for(int i = 0; i < NumTxns; ++i) {
+                threads.emplace_back([&]() {
+                    // Cache them all (Except the first in the list, which the function expects to be coinbase)
+                    provider.DBCacheAllInputs(txns);
+                });
+            }
+            for (auto& thread : threads) {
+                thread.join();
+            }
+        });
+
+        auto results = span.RunSharded(NumTxns, shardedTarget, std::cref(txns));
+        spawner.join();
+    }
+
     for(size_t i = 1; i < txns.size(); ++i)
     {
         BOOST_CHECK(provider.HaveCoinInCache(txns[i]->vin[0].prevout));

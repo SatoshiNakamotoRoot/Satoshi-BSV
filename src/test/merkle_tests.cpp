@@ -473,7 +473,7 @@ BOOST_AUTO_TEST_CASE(merkle_proof)
     {
         CMutableTransaction mtx{};
         mtx.nLockTime = j;
-        block.vtx[j] = make_shared<const CTransaction>(move(mtx));
+        block.vtx[j] = make_shared<const CTransaction>(std::move(mtx));
     }
 
     // lambda to create CMerkleTree version of proof and return a nodes list
@@ -530,7 +530,7 @@ BOOST_AUTO_TEST_CASE(merkle_proof)
         }
 
         // Check invalid proof
-        MerkleProof badProof{TxId{GetRandHash()}, txnIndex, checkRoot, nodes};
+        MerkleProof badProof{TxId{InsecureRand256()}, txnIndex, checkRoot, nodes};
         BOOST_CHECK(!badProof.Verify());
     }
 

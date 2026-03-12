@@ -32,11 +32,6 @@ namespace
         std::vector<uint8_t> sSerialized(s.begin(), s.end());
         return sSerialized;
     }
-
-    opcodetype OpCode(uint8_t o)
-    {
-        return static_cast<opcodetype>(o);
-    }
 }
 
 BOOST_FIXTURE_TEST_SUITE(sigopcount_tests, BasicTestingSetup)
@@ -44,11 +39,12 @@ BOOST_FIXTURE_TEST_SUITE(sigopcount_tests, BasicTestingSetup)
 BOOST_AUTO_TEST_CASE(GetSigOpCount_WithReturn)
 {
     // Tests for GitHub #296 & SVN-2388
+    CScriptNum BigNum { std::vector<uint8_t>{1,2,3,4,5}, false, 6, true };
     using TestParams = std::tuple<CScript, bool, uint64_t>; // <Script, triggers error, sig op count>
     std::vector<TestParams> tests {
         {
-            // Non-minimal encoding of number to OP_CHECKMULTISIG
-            CScript{} << OpCode(0x01) << OpCode(0x00) << OP_CHECKMULTISIG,
+            // Check we can reproduce the sigops error in a non OP_RETURN script
+            CScript{} << BigNum << OP_CHECKMULTISIG,
                 true, 0
         },
         {
@@ -59,7 +55,7 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount_WithReturn)
         {
             // Script with nested OP_IFs skips unexecutable opcodes that follow OP_RETURN at top level scope
             CScript{} << OP_TRUE << OP_IF << OP_TRUE << OP_IF << OP_RETURN << OP_ELSE << OP_3 << OP_CHECKMULTISIG << OP_ENDIF << OP_ENDIF
-                      << OP_RETURN << OpCode(0x01) << OpCode(0x00) << OP_CHECKMULTISIG,
+                      << OP_RETURN << BigNum << OP_CHECKMULTISIG,
                 false, 3
         },
         {
@@ -75,12 +71,12 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount_WithReturn)
         }
     };
 
-    for(const auto& test : tests)
+    for(const auto& [script, errorExpected, sigOpsExpected] : tests)
     {
         bool sigOpCountError {false};
-        uint64_t sigOps { std::get<0>(test).GetSigOpCount(true, true, sigOpCountError) };
-        BOOST_CHECK_EQUAL(sigOpCountError, std::get<1>(test));
-        BOOST_CHECK_EQUAL(sigOps, std::get<2>(test));
+        uint64_t sigOps { script.GetSigOpCount(true, true, sigOpCountError) };
+        BOOST_CHECK_EQUAL(sigOpCountError, errorExpected);
+        BOOST_CHECK_EQUAL(sigOps, sigOpsExpected);
     }
 }
 

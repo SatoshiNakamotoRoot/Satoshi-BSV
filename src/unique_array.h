@@ -11,6 +11,7 @@
 #include <span>
 
 // vector-like wrapper around a unique_ptr to an array of uint8_t's
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class unique_array
 {
 public:
@@ -72,7 +73,8 @@ public:
     void reset();
 
 private:
-    std::unique_ptr<value_type[]> p_{};
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
+    std::unique_ptr<value_type[]> p_{std::make_unique<value_type[]>(0)};
 
     size_t cap_{0};
     size_t size_{0};

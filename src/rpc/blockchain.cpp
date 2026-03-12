@@ -11,7 +11,6 @@
 #include "block_index_store.h"
 #include "chain.h"
 #include "chainparams.h"
-#include "checkpoints.h"
 #include "coins.h"
 #include "config.h"
 #include "consensus/validation.h"
@@ -21,6 +20,7 @@
 #include "policy/policy.h"
 #include "primitives/transaction.h"
 #include "rpc/http_protocol.h"
+#include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "rpc/tojson.h"
 #include "streams.h"
@@ -1958,6 +1958,10 @@ UniValue gettxout(const Config &config, const JSONRPCRequest &request) {
         fMempool = request.params[2].get_bool();
     }
 
+    // cs_main locked here just to preserve locking order
+    // once it is removed from writeCoin lambda it can be
+    // deleted here as well
+    LOCK(cs_main);
     CoinsDBView tipView{*pcoinsTip};
 
     auto writeCoin =
@@ -2175,6 +2179,10 @@ void gettxouts(const Config& config,
     jWriter.writeBeginObject("result");
     jWriter.writeBeginArray("txouts");
 
+    // cs_main locked here just to preserve locking order
+    // once it is removed from writeCoin lambda it can be
+    // deleted here as well
+    LOCK(cs_main);
     CoinsDBView tipView{ *pcoinsTip };
 
     auto writeCoin =
@@ -3471,6 +3479,10 @@ UniValue getblockstats_impl(const Config &config,
             maxfee = std::max(maxfee, txfee);
             minfee = std::min(minfee, txfee);
             totalfee += txfee;
+
+            if(tx_size == 0)
+                throw JSONRPCError(RPC_INTERNAL_ERROR,
+                                   "Division by zero: tx_size");
 
             Amount feerate = txfee / tx_size;
             if (do_medianfeerate) {
