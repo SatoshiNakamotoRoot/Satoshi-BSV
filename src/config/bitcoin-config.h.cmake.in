@@ -53,5 +53,3 @@
 
 #cmakedefine ENABLE_WALLET 1
 #cmakedefine ENABLE_ZMQ 1
-
-#endif // BITCOIN_BITCOIN_CONFIG_H
