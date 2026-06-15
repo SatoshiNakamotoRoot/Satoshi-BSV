@@ -5,8 +5,8 @@ the Bitcoin SV Security Team.
 
 ## Bitcoin SV Node Implementation Release Keys
 
-* User id: Daniel Connolly (Bitcoin SV binary release signing key) <d.connolly@nchain.com>
-* Fingerprint: `2E6B64609F97BD0C3ABD89E1169E3EC06431FF95`
+*User id: Daniel Connolly (Bitcoin SV binary release signing key) <d.connolly@nchain.com>
+*Fingerprint: `2E6B64609F97BD0C3ABD89E1169E3EC06431FF95`
 
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -282,5 +282,3 @@ c7ipgGLAx1qCZYmxsFzzB7VsAAA85Qcow9tMHi7JrTLnlU5bb8FA18mmG7T8F9M6
 v7ed0V4eU8p5fzla7auhB+wyIkulnJbt
 =1H3B
 -----END PGP PUBLIC KEY BLOCK-----
-```
-
